@@ -1,0 +1,383 @@
+---
+title: "Advanced Bioinformatics 2025 assessment"
+author: "m2408689"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+The following code loads all of the libraries necessary for this assessment:
+
+```{r load-packages, message=FALSE}
+library(DESeq2)
+library(pheatmap)
+library(RColorBrewer)
+library(ggplot2)
+library(GenomicRanges)
+library(BSgenome)
+library(BSgenome.Mmusculus.UCSC.mm9)
+```
+
+Install if necessary:
+
+BiocManager::install("BSgenome")
+
+BiocManager::install("BSgenome.Mmusculus.UCSC.mm9")
+
+---
+
+# General R/Rstudio Assessemnt
+
+---
+
+## Task 3.1
+
+---
+
+The following code evaluates the sum of all integers between 5 and 55, where the value 1 indicates the interval between the numbers:
+
+```{r integer_sum}
+sum(seq(5, 55, 1))
+
+```
+---
+
+## Task 3.2 
+
+---
+
+The following code creates a function that calculates the sum of all integers between 5 and 55, so it uses the same code as above but you can call the function. If the value input is below it prompts the user to pick a number above 5. Examples are given below the code.
+
+```{r sumfun}
+sumfun <- function(n) {
+  if (n > 5) {
+    return(sum(seq(5, n, 1)))
+  } else {
+    return("This number is 5 or below, please use a number greater than 5.")
+  }
+}
+sumfun(10)
+sumfun(20)
+sumfun(100)
+sumfun(4)
+```
+
+
+---
+
+## Task 3.3
+
+---
+
+This code calculates and prints the fibonacci sequence up to 12 integers, or it is supposed to anyway:
+
+```{r fibonacci}
+n <- 1
+for (x in 1:12) 
+  {print(x + n)
+  n <- n + (x - 1)
+}
+
+
+
+```
+
+---
+
+## Task 3.4
+
+---
+
+This code uses ggplot and a dataset to produce a boxplot of mpg at each gear:
+
+```{r mtcars}
+ggplot(data = mtcars, aes(x = gear, y = mpg)) +
+  geom_boxplot(aes(fill= as.factor(gear)))
+```
+
+---
+
+## Task 3.5
+
+---
+
+
+```{r cars_lm}
+y <- cars$dist
+x <- cars$speed
+model <- lm(y ~ x)
+summary(model)
+```
+---
+
+## Task 3.6
+
+---
+
+```{r linear_fit}
+ggplot(cars, aes(speed, dist)) + geom_point() + geom_smooth(method="lm", formula="y~x")
+```
+---
+## Task 3.7
+
+---
+
+
+
+---
+
+# RNA-seq Assessment
+
+---
+
+## Task 3.8
+
+---
+
+This code reads a count data from a file and prints it:
+
+```{r read-counts}
+all_counts <- read.csv(file = "data/MacsPeaks/exercise1_counts.csv", row.names = 1)
+head(all_counts)
+```
+---
+
+This code reads a datafile and removes "TMC_" from filname columns, preparing the data of DESeq2:
+
+```{r read-sample-description}
+sam_des <- read.table("data/MacsPeaks/exercise1_sample_description.info", sep = "\t", header = TRUE)
+sam_des$filename <- sub("TMC_", "", sam_des$ filename)
+head(sam_des)
+```
+---
+
+## Task 3.9
+
+---
+
+This code constructs a data frame with specific columns, matching the previous file, converting them to factors. The second part checks whether it has done this correctly: 
+
+```{r create-coldata}
+col_data <- data.frame(
+  sample = sam_des$sample,
+  condition = sam_des$condition,
+  batch = sam_des$batch
+)
+
+col_data$sample <- as.factor(col_data$sample)
+col_data$condition <- as.factor(col_data$condition)
+col_data$batch <- as.factor(col_data$batch)
+all(colnames(all_counts) == as.character(col_data$sample))
+```
+---
+
+## Task 3.10
+
+---
+
+This code creates a DESeq dataset object from the metadata and runs a DESeq differential analysis.
+
+```{r create-dds}
+dds <- DESeqDataSetFromMatrix(
+  countData = all_counts,
+  colData = col_data,
+  design = ~ condition
+)
+dds <- DESeq(dds)
+```
+---
+
+## Task 3.11
+
+---
+
+The following code normalises the data:
+
+```{r transform-data}
+rld <- rlog(dds)
+vsd <- varianceStabilizingTransformation(dds)
+```
+
+----
+
+## Task 3.12
+
+---
+
+The following code selects the top 40 highly expressed genes and uses pheatmap to poroduce a heatmap. This shows the sample clustering:
+
+```{r heatmap-40, message=FALSE}
+
+dds_counts <- counts(dds, normalized = TRUE)
+
+select <- order(rowMeans(dds_counts), decreasing = TRUE)[1:40]
+
+pheatmap(assay(rld)[select, ])
+
+pheatmap(assay(vsd)[select, ])
+```
+
+
+## Task 3.13
+
+This code produces a distance matrix:
+
+```{r heatmap-sample-distance, message=FALSE}
+sample_dist <- dist(t(assay(rld)))
+class(sample_dist)
+
+sdm <- as.matrix(sample_dist)
+class(sdm)
+
+library("RColorBrewer")
+
+rownames(sdm) <- rld$condition
+colnames(sdm) <- NULL
+
+colors <- colorRampPalette(rev(brewer.pal(9, "Blues")))(255)
+
+pheatmap(sdm,
+         clustering_distance_rows = sample_dist,
+         clustering_distance_cols = sample_dist,
+         col = colors)
+```
+## Task 3.14
+
+This code performs PCA on vsd data and saves the plot:
+
+```{r pca-rlog}
+plotPCA(rld, intgroup = "condition")
+ggsave(file = "data/PCA_plot_rld.png")
+
+```
+---
+
+## Task 3.15
+
+---
+
+This code repeats PCA using the VST method:
+
+```{r pca-vst}
+plotPCA(vsd, intgroup = "condition")
+ggsave(file = "data/PCA_plot_vst.png")
+```
+
+---
+
+# ChIP-seq Assessemnt
+
+---
+
+## Task 3.16
+
+---
+
+The following code prepares and analyses ChIP-seq data, identifying protein binding site on the DNA.
+
+The replicate data is read:
+```{r chipseq-peaks}
+mycmel_peak1 <- read.delim("data/MacsPeaks/mycmelrep1_peaks.xls", sep = "\t", comment.char = "#")
+
+mycmel_peak2 <- read.delim("data/MacsPeaks/mycmelrep2_peaks.xls", sep = "\t", comment.char = "#")
+```
+---
+
+A common peakset is generated:
+
+```{r chipseq-granges}
+mycmel1_GR <- GRanges(
+                  seqnames=mycmel_peak1[,"chr"],
+                  IRanges(mycmel_peak1[,"start"],
+                  mycmel_peak1[,"end"]
+                  )
+                )
+
+mcols(mycmel1_GR) <- mycmel_peak1[, c("abs_summit", "fold_enrichment")]
+
+mycmel2_GR <- GRanges(
+                  seqnames=mycmel_peak2[,"chr"],
+                  IRanges(mycmel_peak2[,"start"],
+                  mycmel_peak2[,"end"]
+                  )
+                )
+
+mcols(mycmel2_GR) <- mycmel_peak2[,c("abs_summit", "fold_enrichment")]
+```
+---
+
+```{r chipseq-overlaps}
+all_peaks <- mycmel1_GR[mycmel1_GR %over% mycmel2_GR]
+
+mycmel_common_peaks <- all_peaks[
+  all_peaks %over% mycmel1_GR & all_peaks %over% mycmel2_GR
+]
+```
+
+---
+
+## Task 3.17
+
+---
+
+The following code ranks the sequences by their fold enrichment. The top 500 are selected and resized to 200bp:
+
+```{r chipseq-rank-resize}
+mycmel_ranked_peaks <- mycmel_common_peaks[
+  order(mcols(mycmel_common_peaks)$fold_enrichment, decreasing = TRUE)
+]
+
+top_peaks <- head(mycmel_ranked_peaks, 500)
+top_peaks_resized <- resize(top_peaks, width = 200, fix = "center")
+```
+
+---
+
+## Task 3.18
+
+---
+
+The resulting sequences are extracted from a database and output in fasta format, ready for analysis:
+
+```{r extract-sequences, eval=FALSE}
+
+# Extracts sequences
+genome <- BSgenome.Mmusculus.UCSC.mm9
+
+# Ensures UCSC naming styles
+seqlevelsStyle(top_peaks_resized) <- "UCSC"
+
+# Extracts the top sequences from the genome
+top_peaks_sequences <- getSeq(genome, top_peaks_resized)
+                                         
+names(top_peaks_sequences) <- paste0("peak_", seqnames(top_peaks_resized), "_", start(top_peaks_resized), "-", end(top_peaks_resized))
+
+### Write to fasta
+Biostrings::writeXStringSet(top_peaks_sequences,file="consensus_peaks.fa")
+```
+---
+
+## Task 3.19
+
+---
+
+The resulting fasta file is run through this website:
+
+[MEME-ChIP tool website](https://meme-suite.org/meme/tools/meme-chip)
+
+----
+
+This is some of the MEME-ChIP output. Motifs are short DNA sequences representing transcription bindign sites:
+
+```{r view-motif}
+library(universalmotif)
+
+motifs <- read_meme("motif.meme")
+
+# Render the top motif
+view_motifs(motifs[1:4])
+```
+---
